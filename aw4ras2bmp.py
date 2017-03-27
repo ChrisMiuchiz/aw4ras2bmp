@@ -2,14 +2,14 @@
 #Written for Python 3.6.0
 import sys
 
-def to4bytes(int):
+def to4bytes(integer):
     bytes = [0,0,0,0]
-    if int <= 0xFFFFFFFF:
+    if integer <= 0xFFFFFFFF:
         i=3
-        while int>0:
-            bytes[i]=(int&0xFF)
-            int = int^0xFF
-            int = int>>8
+        while integer>0:
+            bytes[i]=(integer&0xFF)
+            integer = integer^0xFF
+            integer = integer>>8
             i -= 1
         return list(reversed(bytes))
     else:
