@@ -23,16 +23,16 @@ def readbytes(contents, address, bytenum):
         i -= 1
     return result
 
-def getraspixel(type, filecontents, address):
-    if type == "r":
+def getraspixel(ptype, filecontents, address):
+    if ptype == "r":
         pixelbytes = [((filecontents[address+1]&0xF8)>>3)]
         redpixel = round((pixelbytes[0]*255)/31)
         return redpixel
-    elif type == "g":
+    elif ptype == "g":
         pixelbytes = [(filecontents[address+1]&0x7),(filecontents[address]&0xE0)>>5]
         greenpixel = round((((pixelbytes[0]<<3)+pixelbytes[1])*255)/63)
         return greenpixel
-    elif type == "b":
+    elif ptype == "b":
         pixelbytes = [filecontents[address]&0x1F]
         bluepixel = round((pixelbytes[0]*255)/31)
         return bluepixel
