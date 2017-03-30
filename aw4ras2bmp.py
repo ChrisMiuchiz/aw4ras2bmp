@@ -37,6 +37,25 @@ def getraspixel(ptype, filecontents, address):
         bluepixel = round((pixelbytes[0]*255)/31)
         return bluepixel
 
+def writebmp(destfile, pixels, width, height):
+    outfile = open(destfile, "wb")
+    out_size = to4bytes(54+len(pixels))
+    out_width = to4bytes(width)
+    out_height = to4bytes(0x100000000-height)
+
+    bmpheader = [0x42, 0x4D]
+    bmpheader.extend(out_size)
+    bmpheader.extend([0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00,
+                      0x28, 0x00, 0x00, 0x00])#DIB
+    bmpheader.extend(out_width)
+    bmpheader.extend(out_height)
+    bmpheader.extend([0x01, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+    outfile.write(bytearray(bmpheader))
+    outfile.write(bytearray(pixels))
+    outfile.close()
+
+
 if len(sys.argv) != 2:
     print("Usage: aw4ras2bmp <input RAS file>")
     infile = input("Enter input RAS file: ")
@@ -47,41 +66,41 @@ try:
 except:
     print("Error opening file.")
     quit()
-destfile = str(infile[:len(infile)-3])+"bmp"
-
+    
+destfile = str(infile[:-3])+"bmp"
 rascontents = rasfile.read()
 rasfile.close()
 width = readbytes(rascontents, 0x5, 2)
 height = readbytes(rascontents, 0x7, 2)
+rastype =  rascontents[0x0A]
 print("Input filename:",infile)
 print("Width:",width)
 print("Height:",height)
-outfile = open(destfile, "wb")
 
 i=0x0D #Starting point
 pixels = []
 
 #make pixel array
-while i < len(rascontents):
-    pixels.append(getraspixel("b", rascontents, i))
-    pixels.append(getraspixel("g", rascontents, i))
-    pixels.append(getraspixel("r", rascontents, i))
-    i+=2
-    
-#write bmp file
-out_size = to4bytes(54+len(pixels))
-out_width = to4bytes(width)
-out_height = to4bytes(0x100000000-height)
+rasfilelen = len(rascontents)
+if rastype == 5: #Type 5 uses RGB M (4 bytes)
+    maskpixels = []
+    maskfile = str(infile[:-4])+"_MASK.bmp"
+    while i < rasfilelen:
+        pixels.append(rascontents[i])
+        pixels.append(rascontents[i+1])
+        pixels.append(rascontents[i+2])
+        maskpixels.extend([rascontents[i+3]]*3)
+        i += 4
 
-bmpheader = [0x42, 0x4D]
-bmpheader.extend(out_size)
-bmpheader.extend([0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00,
-                  0x28, 0x00, 0x00, 0x00])#DIB
-bmpheader.extend(out_width)
-bmpheader.extend(out_height)
-bmpheader.extend([0x01, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    writebmp(maskfile, maskpixels, width, height) #Make mask bmp file
+        
+else:
+    while i < rasfilelen: #Typical type uses RGB (2 bytes)
+        pixels.append(getraspixel("b", rascontents, i))
+        pixels.append(getraspixel("g", rascontents, i))
+        pixels.append(getraspixel("r", rascontents, i))
+        i += 2
 
-outfile.write(bytearray(bmpheader))
-outfile.write(bytearray(pixels))
-outfile.close()
 
+#write bmp file for all cases
+writebmp(destfile, pixels, width, height)
