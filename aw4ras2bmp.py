@@ -23,7 +23,22 @@ def readbytes(contents, address, bytenum):
         i -= 1
     return result
 
-def getraspixel(ptype, filecontents, address):
+def getmask3pixel(ptype, filecontents, address): #For things like png ras. GBRM
+    if ptype == "r":
+        redpixel = round(((filecontents[address+1]&0x0F))*17)
+        return redpixel
+    elif ptype == "g":
+        bluepixel = round(((filecontents[address]&0xF0)>>4)*17)
+        return bluepixel
+    elif ptype == "b":
+        greenpixel = round((filecontents[address]&0x0F)*17)
+        return greenpixel
+    elif ptype == "m":
+        maskpixel = round(((filecontents[address+1]&0xF0)>>4)*17)
+        return maskpixel
+
+
+def getraspixel(ptype, filecontents, address): #Typical ras files
     if ptype == "r":
         pixelbytes = [((filecontents[address+1]&0xF8)>>3)]
         redpixel = round((pixelbytes[0]*255)/31)
@@ -36,6 +51,7 @@ def getraspixel(ptype, filecontents, address):
         pixelbytes = [filecontents[address]&0x1F]
         bluepixel = round((pixelbytes[0]*255)/31)
         return bluepixel
+    
 
 def writebmp(destfile, pixels, width, height):
     outfile = open(destfile, "wb")
@@ -68,14 +84,21 @@ except:
     quit()
     
 destfile = str(infile[:-3])+"bmp"
+
 rascontents = rasfile.read()
 rasfile.close()
+framecount = readbytes(rascontents, 0x3, 2)
 width = readbytes(rascontents, 0x5, 2)
-height = readbytes(rascontents, 0x7, 2)
+height = readbytes(rascontents, 0x7, 2) * framecount
 rastype =  rascontents[0x0A]
+
 print("Input filename:",infile)
+print("Type:",rastype)
+print("Frames:",framecount)
 print("Width:",width)
 print("Height:",height)
+
+masktypes = [3, 5] #The types that contain mask files
 
 i=0x0D #Starting point
 pixels = []
@@ -92,8 +115,18 @@ if rastype == 5: #Type 5 uses RGB M (4 bytes)
         maskpixels.extend([rascontents[i+3]]*3)
         i += 4
 
-    writebmp(maskfile, maskpixels, width, height) #Make mask bmp file
-        
+  
+elif rastype == 3: 
+    maskpixels = []
+    maskfile = str(infile[:-4])+"_MASK.bmp"
+    while i < rasfilelen:
+        pixels.append(getmask3pixel("b", rascontents, i))
+        pixels.append(getmask3pixel("g", rascontents, i))
+        pixels.append(getmask3pixel("r", rascontents, i))
+        maskpixels.extend([getmask3pixel("m", rascontents, i)] * 3)
+        i += 2
+
+    
 else:
     while i < rasfilelen: #Typical type uses RGB (2 bytes)
         pixels.append(getraspixel("b", rascontents, i))
@@ -101,6 +134,8 @@ else:
         pixels.append(getraspixel("r", rascontents, i))
         i += 2
 
+if rastype in masktypes:
+    writebmp(maskfile, maskpixels, width, height) #Make mask bmp file
 
 #write bmp file for all cases
 writebmp(destfile, pixels, width, height)
