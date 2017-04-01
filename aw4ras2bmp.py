@@ -23,18 +23,18 @@ def readbytes(contents, address, bytenum):
         i -= 1
     return result
 
-def getmask3pixel(ptype, filecontents, address): #For things like png ras. GBRM
+def getmask3pixel(ptype, filecontents, address): #For things like png ras. GBR M/A
     if ptype == "r":
-        redpixel = round(((filecontents[address+1]&0x0F))*17)
+        redpixel = (filecontents[address+1]&0x0F)*17
         return redpixel
     elif ptype == "g":
-        bluepixel = round(((filecontents[address]&0xF0)>>4)*17)
+        bluepixel = ((filecontents[address]&0xF0)>>4)*17
         return bluepixel
     elif ptype == "b":
-        greenpixel = round((filecontents[address]&0x0F)*17)
+        greenpixel = (filecontents[address]&0x0F)*17
         return greenpixel
     elif ptype == "m":
-        maskpixel = round(((filecontents[address+1]&0xF0)>>4)*17)
+        maskpixel = ((filecontents[address+1]&0xF0)>>4)*17
         return maskpixel
 
 
@@ -53,19 +53,35 @@ def getraspixel(ptype, filecontents, address): #Typical ras files
         return bluepixel
     
 
-def writebmp(destfile, pixels, width, height):
+def writebmp(destfile, pixels, width, height, hasAlpha):
     outfile = open(destfile, "wb")
-    out_size = to4bytes(54+len(pixels))
     out_width = to4bytes(width)
     out_height = to4bytes(0x100000000-height)
 
-    bmpheader = [0x42, 0x4D]
-    bmpheader.extend(out_size)
-    bmpheader.extend([0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00,
-                      0x28, 0x00, 0x00, 0x00])#DIB
-    bmpheader.extend(out_width)
-    bmpheader.extend(out_height)
-    bmpheader.extend([0x01, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    if hasAlpha:
+         out_size = to4bytes(122+len(pixels))
+        
+         bmpheader = [0x42, 0x4D]
+         bmpheader.extend(out_size)
+         bmpheader.extend([0x00, 0x00, 0x00, 0x00, 0x7A, 0x00, 0x00, 0x00,
+                          0x6C, 0x00, 0x00, 0x00]) #DIB
+         bmpheader.extend(out_width)
+         bmpheader.extend(out_height)
+         bmpheader.extend([0x01, 0x00, 0x20, 0x00, 0x03, 0x00, 0x00, 0x00])
+         bmpheader.extend(to4bytes(len(pixels)))
+         bmpheader.extend([0x13, 0x0B, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x20, 0x6E, 0x69, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+    else:
+         
+         out_size = to4bytes(54+len(pixels))
+
+         bmpheader = [0x42, 0x4D]
+         bmpheader.extend(out_size)
+         bmpheader.extend([0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00,
+                          0x28, 0x00, 0x00, 0x00])#DIB
+         bmpheader.extend(out_width)
+         bmpheader.extend(out_height)
+         bmpheader.extend([0x01, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     outfile.write(bytearray(bmpheader))
     outfile.write(bytearray(pixels))
@@ -91,6 +107,7 @@ framecount = readbytes(rascontents, 0x3, 2)
 width = readbytes(rascontents, 0x5, 2)
 height = readbytes(rascontents, 0x7, 2) * framecount
 rastype =  rascontents[0x0A]
+hasAlpha = False #Assume no alpha values
 
 print("Input filename:",infile)
 print("Type:",rastype)
@@ -112,18 +129,26 @@ if rastype == 5: #Type 5 uses RGB M (4 bytes)
         pixels.append(rascontents[i])
         pixels.append(rascontents[i+1])
         pixels.append(rascontents[i+2])
-        maskpixels.extend([rascontents[i+3]]*3)
+        maskpixels.extend([rascontents[i+3]] * 3)
         i += 4
 
   
 elif rastype == 3: 
-    maskpixels = []
-    maskfile = str(infile[:-4])+"_MASK.bmp"
+
+    if infile[-8:-4] == "_png":
+        hasAlpha = True
+        print("Generating alpha layer")
+    else:
+        maskpixels = []
+        maskfile = str(infile[:-4])+"_MASK.bmp"
     while i < rasfilelen:
         pixels.append(getmask3pixel("b", rascontents, i))
         pixels.append(getmask3pixel("g", rascontents, i))
         pixels.append(getmask3pixel("r", rascontents, i))
-        maskpixels.extend([getmask3pixel("m", rascontents, i)] * 3)
+        if hasAlpha:
+            pixels.append(getmask3pixel("m", rascontents, i))
+        else:
+            maskpixels.extend([getmask3pixel("m", rascontents, i)] * 3)
         i += 2
 
     
@@ -134,8 +159,8 @@ else:
         pixels.append(getraspixel("r", rascontents, i))
         i += 2
 
-if rastype in masktypes:
-    writebmp(maskfile, maskpixels, width, height) #Make mask bmp file
+if rastype in masktypes and not hasAlpha:
+    writebmp(maskfile, maskpixels, width, height, False) #Make mask bmp file
 
 #write bmp file for all cases
-writebmp(destfile, pixels, width, height)
+writebmp(destfile, pixels, width, height, hasAlpha)
