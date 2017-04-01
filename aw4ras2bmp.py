@@ -87,12 +87,15 @@ def writebmp(destfile, pixels, width, height, hasAlpha):
     outfile.write(bytearray(pixels))
     outfile.close()
 
+hasAlpha = False #Assume no alpha values
 
-if len(sys.argv) != 2:
+if len(sys.argv) < 2:
     print("Usage: aw4ras2bmp <input RAS file>")
     infile = input("Enter input RAS file: ")
 else:
     infile=str(sys.argv[1])
+    if "-alpha" in sys.argv:
+        hasAlpha = True
 try:
     rasfile = open(infile, "rb")
 except:
@@ -107,7 +110,7 @@ framecount = readbytes(rascontents, 0x3, 2)
 width = readbytes(rascontents, 0x5, 2)
 height = readbytes(rascontents, 0x7, 2) * framecount
 rastype =  rascontents[0x0A]
-hasAlpha = False #Assume no alpha values
+
 
 print("Input filename:",infile)
 print("Type:",rastype)
@@ -129,7 +132,10 @@ if rastype == 5: #Type 5 uses RGB M (4 bytes)
         pixels.append(rascontents[i])
         pixels.append(rascontents[i+1])
         pixels.append(rascontents[i+2])
-        maskpixels.extend([rascontents[i+3]] * 3)
+        if hasAlpha:
+            pixels.append(rascontents[i+3]) #Can only happen if forced to by command
+        else:
+            maskpixels.extend([rascontents[i+3]] * 3)
         i += 4
 
   
@@ -137,7 +143,6 @@ elif rastype == 3:
 
     if infile[-8:-4] == "_png":
         hasAlpha = True
-        print("Generating alpha layer")
     else:
         maskpixels = []
         maskfile = str(infile[:-4])+"_MASK.bmp"
@@ -162,5 +167,7 @@ else:
 if rastype in masktypes and not hasAlpha:
     writebmp(maskfile, maskpixels, width, height, False) #Make mask bmp file
 
+if hasAlpha:
+    print("Generating alpha layer")
 #write bmp file for all cases
 writebmp(destfile, pixels, width, height, hasAlpha)
